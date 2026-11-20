@@ -1,4 +1,4 @@
-// Token radar, model radar-4: category-calibrated comps.
+// Token radar, model radar-4.1: category-calibrated comps, retuned by LOO.
 //
 // The board ranks every protocol the snapshot can still call pre-token: the
 // house watchlist (the floor) plus every other protocol below the floor that
@@ -9,9 +9,10 @@
 //
 // Implied value, from the snapshot's own figures only:
 //
-//   multiple   = median (mcap / tvl) of the live-token protocols in the
-//                protocol's own category (at least 3 comps), else the median
-//                across every live-token protocol
+//   multiple   = the median (mcap / tvl) of the live-token protocols in the
+//                protocol's own category (at least 5 comps), shrunk toward
+//                the global median: (n * category + 5 * global) / (n + 5);
+//                with fewer than 5 comps, the global median alone
 //   growth     = clamp(change_7d, -60, 120) per cent
 //   growthMult = 1 + (growth / 100) * GROWTH_WEIGHT
 //   maturity   = MATURITY_FLOOR + min(age_days, MATURITY_DAYS) / MATURITY_DAYS
@@ -60,21 +61,23 @@ export interface ModelConstants {
   maturity_days: number;
   unknown_age_days: number;
   min_category_comps: number;
+  shrink_k: number;
 }
 
 export const MODEL: ModelConstants = {
-  growth_weight: 0.5,
+  growth_weight: 1.0,
   growth_floor: -60,
   growth_cap: 120,
-  maturity_floor: 0.6,
-  maturity_range: 0.4,
-  maturity_days: 1095,
+  maturity_floor: 0.4,
+  maturity_range: 0.6,
+  maturity_days: 1460,
   unknown_age_days: 365,
-  min_category_comps: 3,
+  min_category_comps: 5,
+  shrink_k: 5,
 };
 
 /** The model's version label: the dashboard names it. */
-export const MODEL_VERSION = 'radar-4';
+export const MODEL_VERSION = 'radar-4.1';
 
 /** How many live-token protocols the dashboard's Live tab carries, by market cap. */
 export const LIVE_ROWS = 24;
@@ -266,16 +269,23 @@ function globalMultiple(protocols: SnapshotProtocol[]): number {
   return median(all);
 }
 
-/** A category's fitted multiple: its own median when it has enough comps, else the global median. */
+/** A category's fitted multiple: its own median, shrunk toward the global
+ *  median by weight shrinkK, when it has enough comps; else the global median alone. */
 function fittedMultiple(
   category: string | null,
   byCat: Map<string, number[]>,
   global: number,
   minComps: number,
+  shrinkK: number,
 ): { multiple: number; comps: number } {
   const key = category ?? '(no category)';
   const list = byCat.get(key) ?? [];
-  if (list.length >= minComps) return { multiple: median(list), comps: list.length };
+  if (list.length >= minComps) {
+    const catMed = median(list);
+    const multiple =
+      shrinkK > 0 ? (list.length * catMed + shrinkK * global) / (list.length + shrinkK) : catMed;
+    return { multiple, comps: list.length };
+  }
   return { multiple: global, comps: list.length };
 }
 
@@ -310,7 +320,7 @@ export function backtest(snapshot: Snapshot, model: ModelConstants = MODEL): Bac
     );
     const byCat = liveMultiples(peers);
     const global = globalMultiple(peers);
-    const { multiple } = fittedMultiple(p.category, byCat, global, model.min_category_comps);
+    const { multiple } = fittedMultiple(p.category, byCat, global, model.min_category_comps, model.shrink_k);
     const { implied } = impliedValue(p, snapshot.as_of, multiple, model);
     errors.push(Math.abs(implied - p.mcap_usd!) / p.mcap_usd!);
   }
@@ -343,7 +353,7 @@ export function buildBoard(snapshot: Snapshot, model: ModelConstants = MODEL): B
     chosen.set(p.slug, p);
   }
   const scored = [...chosen.values()].map((p) => {
-    const { multiple, comps } = fittedMultiple(p.category, byCat, global, model.min_category_comps);
+    const { multiple, comps } = fittedMultiple(p.category, byCat, global, model.min_category_comps, model.shrink_k);
     const v = impliedValue(p, snapshot.as_of, multiple, model);
     return { p, multiple, comps, ...v };
   });

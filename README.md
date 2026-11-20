@@ -29,12 +29,15 @@ That writes `out/board.json`, `out/data.js`, `out/dashboard/`,
 
 ## Model
 
-`lib/model.ts` (`radar-4`): implied value = TVL x category multiple x growth
-multiplier x maturity multiplier. The category multiple is the median
-mcap/TVL of live-token protocols in the same category (at least 3 comps),
-else the global median. Growth is the 7-day TVL change clamped to -60..120%,
-weighted 0.5. Maturity rises from 0.6 to 1.0 over three years with no token;
-unknown age counts as 365 days.
+`lib/model.ts` (`radar-4.1`, retuned by leave-one-out search over 2,700 constant
+combinations on the snapshot's 128 live-token protocols): implied value = TVL x
+category multiple x growth multiplier x maturity multiplier. The category
+multiple is the median mcap/TVL of live-token protocols in the same category
+(at least 5 comps), shrunk toward the global median as
+(n x category + 5 x global) / (n + 5); with fewer than 5 comps the global
+median is used alone. Growth is the 7-day TVL change clamped to -60..120%,
+counted at full weight. Maturity rises from 0.4 to 1.0 over four years with no
+token; unknown age counts as 365 days.
 
 ## License
 

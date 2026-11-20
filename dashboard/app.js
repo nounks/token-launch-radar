@@ -288,12 +288,13 @@
     main.innerHTML =
       '<div class="grid2"><div>' +
       '<div class="card"><h3>How the value is worked out</h3>' +
-      '<div class="formula">implied = TVL x category multiple\n        x (1 + clamp(7d change, -60, 120)% x growth weight)\n        x (0.6 + min(age, 1095d) / 1095 x 0.4)</div>' +
+      '<div class="formula">implied = TVL x category multiple\n        x (1 + clamp(7d change, -60, 120)% x growth weight)\n        x (0.4 + min(age, 1460d) / 1460 x 0.6)</div>' +
       '<p>The <b>category multiple</b> is the median market-cap-to-TVL ratio of the live-token protocols in the ' +
-      'same category (at least ' + m.min_category_comps + ' comps), or the global median of <b>' + R.global_multiple.toFixed(3) + 'x</b> ' +
-      'when a category has too few. Nothing is fitted to a name: the same function scores every row.</p>' +
-      '<p>Growth is the protocol\u2019s own 7-day TVL change, clamped so one hot week cannot dominate. ' +
-      'Maturity rises with how long the protocol has run with no token, from 0.6 to 1.0 over three years; ' +
+      'same category (at least ' + m.min_category_comps + ' comps), shrunk toward the global median of <b>' + R.global_multiple.toFixed(3) + 'x</b> ' +
+      'as (n x category + ' + m.shrink_k + ' x global) / (n + ' + m.shrink_k + '); with too few comps the global median is used alone. ' +
+      'Nothing is fitted to a name: the same function scores every row.</p>' +
+      '<p>Growth is the protocol\u2019s own 7-day TVL change, clamped so one hot week cannot dominate, counted at full weight. ' +
+      'Maturity rises with how long the protocol has run with no token, from 0.4 to 1.0 over four years; ' +
       'a protocol with no listing date is treated as ' + m.unknown_age_days + ' days old.</p></div>' +
       '<div class="card"><h3>Validation, computed from the snapshot</h3>' +
       '<p>Leave-one-out over the <b>' + b.live_count + '</b> live-token protocols: each one\u2019s market cap predicted ' +
@@ -314,8 +315,8 @@
       '<div class="card"><h3>Category multiples</h3>' +
       '<div class="tablewrap"><table><thead><tr><th>Category</th><th class="num">Comps</th><th class="num">Multiple</th></tr></thead>' +
       '<tbody>' + multRows + '</tbody></table></div>' +
-      '<p class="mini">Median market-cap-to-TVL among live-token protocols, per category. Categories with fewer than ' +
-      m.min_category_comps + ' comps fall back to the global median.</p></div>' +
+      '<p class="mini">Raw median market-cap-to-TVL among live-token protocols, per category — the fitted multiple starts here and is then shrunk toward the global median. Categories with fewer than ' +
+      m.min_category_comps + ' comps use the global median alone.</p></div>' +
       '</div></div>';
 
     var apply = document.getElementById('sb-apply');
@@ -351,8 +352,8 @@
     var growthPct = clampGrowth(r.change_7d);
     var age = r.age_days == null ? R.model.unknown_age_days : r.age_days;
     var maturity = R.model.maturity_floor + (Math.min(Math.max(age, 0), R.model.maturity_days) / R.model.maturity_days) * R.model.maturity_range;
-    var multipleLabel = 'Category multiple (' + esc(catName(r.category)) + ', ' + r.category_comps + (r.category_comps === 1 ? ' comp' : ' comps') + ')';
-    if (r.category_comps < 3) {
+    var multipleLabel = 'Category multiple (' + esc(catName(r.category)) + ', ' + r.category_comps + (r.category_comps === 1 ? ' comp' : ' comps') + ', shrunk toward global)';
+    if (r.category_comps < R.model.min_category_comps) {
       multipleLabel = 'Multiple: global median (' + esc(catName(r.category)) + ' has only ' + r.category_comps + (r.category_comps === 1 ? ' live comp' : ' live comps') + ')';
     }
     drawer.innerHTML =
